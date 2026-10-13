@@ -5,6 +5,7 @@
 // note l'action dans l'historique → prévient les autres → rafraîchit la page.
 
 import { refresh } from "next/cache";
+import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { notify } from "@/lib/push";
 import { clearMemberCookie, getCurrentMember, setMemberCookie } from "@/lib/auth";
@@ -99,7 +100,7 @@ export async function login(_prev: ActionResult, formData: FormData): Promise<Ac
 
 export async function logout() {
   await clearMemberCookie();
-  refresh();
+  redirect("/"); // retour à l'écran « Qui es-tu ? », même depuis une autre page
 }
 
 // --- Dispo / pas dispo -----------------------------------------------------

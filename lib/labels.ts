@@ -29,9 +29,10 @@ export const CANCEL_MARKER = "[annulation]";
 // Ce que la page envoie à chaque carte de créneau (données déjà prêtes à afficher).
 export type SlotView = {
   id: string;
+  date: string;
+  slot: Slot;
   order: string;
-  title: string; // « Ce soir · 19h »
-  dateLabel: string; // « mar. 13 oct. »
+  title: string; // « Soir · 19h »
   location: Location;
   done: null | { by: string; at: string; comment: string | null };
   people: { memberId: string; name: string; status: Status | null; comment: string | null }[];
@@ -39,3 +40,12 @@ export type SlotView = {
 
 // Un créneau proposé dans « Changer le lieu → Jusqu'au… »
 export type SlotOption = { id: string; order: string; label: string };
+
+// Un jour du calendrier de l'accueil, avec ses deux créneaux.
+export type DayView = {
+  date: string;
+  label: string; // « Mardi 13 octobre »
+  dayNumber: number; // 13
+  month: string | null; // « oct. », affiché seulement sur la 1re case et les 1ers du mois
+  slots: SlotView[];
+};

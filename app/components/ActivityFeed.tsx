@@ -1,10 +1,10 @@
-// Historique des dernières actions, en phrases simples.
+// Fil des dernières actions (= les dernières notifications envoyées), en phrases simples.
 // Composant « serveur » : il ne fait qu'afficher, aucun bouton.
 
 import { CANCEL_MARKER, LOCATION_LABEL, type Location, type Slot } from "@/lib/labels";
 import { slotLabel, timeAgo, treatmentOf } from "@/lib/time";
 
-export type HistoryRow = {
+export type ActivityRow = {
   id: string;
   action: "dispo" | "indispo" | "fait" | "lieu";
   detail: string | null;
@@ -14,7 +14,7 @@ export type HistoryRow = {
 };
 
 // Transforme une ligne de activity_log en phrase : « Tommy est dispo pour demain matin — Je pars tôt »
-function describe(row: HistoryRow, today: string): string {
+function describe(row: ActivityRow, today: string): string {
   const t = row.treatment;
   const when = t ? slotLabel(t.date, t.slot, today) : "un créneau";
   const of = t ? treatmentOf(t.date, t.slot, today) : "";
@@ -40,7 +40,7 @@ function describe(row: HistoryRow, today: string): string {
   }
 }
 
-export default function History({ rows, today }: { rows: HistoryRow[]; today: string }) {
+export default function ActivityFeed({ rows, today }: { rows: ActivityRow[]; today: string }) {
   if (rows.length === 0) return <p className="text-zinc-500">Rien pour l&apos;instant.</p>;
 
   const now = new Date();

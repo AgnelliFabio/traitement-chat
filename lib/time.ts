@@ -64,6 +64,33 @@ export function shortDate(date: string): string {
   }).format(new Date(`${date}T12:00:00Z`));
 }
 
+export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Date longue : « Lundi 12 octobre »
+export function longDate(date: string): string {
+  return capitalize(
+    new Intl.DateTimeFormat("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      timeZone: "UTC",
+    }).format(new Date(`${date}T12:00:00Z`))
+  );
+}
+
+// Mois abrégé : « oct. »
+export function shortMonth(date: string): string {
+  return new Intl.DateTimeFormat("fr-FR", { month: "short", timeZone: "UTC" }).format(
+    new Date(`${date}T12:00:00Z`)
+  );
+}
+
+// Le lundi de la semaine qui contient `date`.
+export function mondayOf(date: string): string {
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay(); // 0 = dimanche, 1 = lundi…
+  return addDays(date, -((weekday + 6) % 7));
+}
+
 // Nom d'un créneau par rapport à aujourd'hui :
 // « ce matin », « ce soir », « demain soir », « hier matin », « jeudi soir »…
 export function slotLabel(date: string, slot: Slot, today: string): string {
@@ -108,7 +135,7 @@ export function slotOrder(date: string, slot: Slot): string {
 // - le matin du jour s'il n'est pas fait et qu'il est avant 13h ;
 // - sinon le soir du jour s'il n'est pas fait ;
 // - sinon le matin du lendemain.
-export function pickNextTreatment<T extends { date: string; slot: Slot; done_at: string | null }>(
+export function pickNextTreatment<T extends { date: string; slot: Slot; done: object | null }>(
   treatments: T[],
   now: ParisNow
 ): T | undefined {
@@ -116,10 +143,10 @@ export function pickNextTreatment<T extends { date: string; slot: Slot; done_at:
     treatments.find((t) => t.date === date && t.slot === slot);
 
   const morning = find(now.date, "matin");
-  if (morning && !morning.done_at && now.hour < 13) return morning;
+  if (morning && !morning.done && now.hour < 13) return morning;
 
   const evening = find(now.date, "soir");
-  if (evening && !evening.done_at) return evening;
+  if (evening && !evening.done) return evening;
 
   return find(addDays(now.date, 1), "matin");
 }

@@ -1,7 +1,6 @@
 "use client";
 
 // La carte d'un créneau (matin ou soir d'un jour donné).
-// - `big` : grande carte du prochain traitement ; sinon version compacte.
 // Affiche le lieu, qui est dispo, si c'est fait, et les boutons d'action.
 
 import { useState, useTransition } from "react";
@@ -23,9 +22,9 @@ const LOCATION_STYLE = {
   pegomas: "bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100",
 };
 
-type Props = { slot: SlotView; me: string; big?: boolean; locationOptions: SlotOption[] };
+type Props = { slot: SlotView; me: string; locationOptions: SlotOption[] };
 
-export default function TreatmentCard({ slot, me, big = false, locationOptions }: Props) {
+export default function TreatmentCard({ slot, me, locationOptions }: Props) {
   const [panel, setPanel] = useState<Panel>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -44,25 +43,14 @@ export default function TreatmentCard({ slot, me, big = false, locationOptions }
   }
 
   const toggle = (p: Panel) => setPanel(panel === p ? null : p);
-  const btn = big ? "h-14 text-lg" : "h-11 text-sm";
+  const btn = "h-12 text-base";
 
   return (
-    <section
-      className={`flex flex-col gap-3 rounded-3xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 ${
-        big ? "p-5 shadow-sm" : "p-4"
-      }`}
-    >
+    <section className="flex flex-col gap-3 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {/* En-tête : créneau + lieu */}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className={big ? "text-2xl font-bold" : "text-lg font-semibold"}>{slot.title}</h2>
-          <p className="text-sm text-zinc-500">{slot.dateLabel}</p>
-        </div>
-        <span
-          className={`rounded-full px-3 py-1 font-semibold ${big ? "text-lg" : "text-sm"} ${
-            LOCATION_STYLE[slot.location]
-          }`}
-        >
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-xl font-bold">{slot.title}</h2>
+        <span className={`rounded-full px-3 py-1 font-semibold ${LOCATION_STYLE[slot.location]}`}>
           📍 {LOCATION_LABEL[slot.location]}
         </span>
       </div>
@@ -70,7 +58,7 @@ export default function TreatmentCard({ slot, me, big = false, locationOptions }
       {/* Fait ? */}
       {slot.done && (
         <div className="rounded-2xl bg-emerald-50 p-3 dark:bg-emerald-950">
-          <p className={big ? "text-lg font-semibold" : "font-semibold"}>
+          <p className="font-semibold">
             ✅ Fait par {slot.done.by} à {slot.done.at}
           </p>
           {slot.done.comment && <p className="text-sm italic text-zinc-600 dark:text-zinc-300">{slot.done.comment}</p>}
