@@ -1,69 +1,158 @@
-import Image from "next/image";
+// Page d'accueil.
+// - Pas identifié → écran « Qui es-tu ? ».
+// - Identifié → prochain traitement en grand, les ~3 jours suivants, puis l'historique.
+// Toutes les lectures en base se font ici, côté serveur.
 
-export default function Home() {
+import { Suspense } from "react";
+import { supabase } from "@/lib/supabase";
+import { getCurrentMember } from "@/lib/auth";
+import { logout } from "@/app/actions";
+import { addDays, formatTime, parisNow, pickNextTreatment, shortDate, slotLabel, slotOrder } from "@/lib/time";
+import { SLOT_HOUR, type Location, type Slot, type SlotOption, type SlotView, type Status } from "@/lib/labels";
+import LoginForm from "./components/LoginForm";
+import TreatmentCard from "./components/TreatmentCard";
+import History, { type HistoryRow } from "./components/History";
+
+type TreatmentRow = {
+  id: string;
+  date: string;
+  slot: Slot;
+  location: Location;
+  done_by: string | null;
+  done_at: string | null;
+  done_comment: string | null;
+};
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// La page elle-même est une coquille ; le contenu (qui lit le cookie) arrive juste après.
+export default function Page() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-6">
+      <Suspense fallback={<p className="text-zinc-500">Chargement…</p>}>
+        <Home />
+      </Suspense>
+    </main>
+  );
+}
+
+async function Home() {
+  const me = await getCurrentMember();
+
+  const { data: members } = await supabase.from("members").select("id, name").order("name");
+  if (!me) return <LoginForm members={members ?? []} />;
+
+  // Crée les créneaux manquants des 14 prochains jours.
+  await supabase.rpc("ensure_treatments", { days: 14 });
+
+  const now = parisNow();
+  const today = now.date;
+
+  const [{ data: treatmentsData }, { data: logsData }] = await Promise.all([
+    supabase
+      .from("treatments")
+      .select("id, date, slot, location, done_by, done_at, done_comment")
+      .gte("date", today)
+      .lte("date", addDays(today, 14))
+      .order("date")
+      .order("slot"), // « matin » avant « soir » (ordre alphabétique)
+    supabase
+      .from("activity_log")
+      .select("id, member_id, treatment_id, action, detail, created_at")
+      .order("created_at", { ascending: false })
+      .limit(20),
+  ]);
+  const treatments = (treatmentsData ?? []) as TreatmentRow[];
+  const logs = logsData ?? [];
+
+  // Réponses de chacun pour ces créneaux.
+  const { data: availData } = await supabase
+    .from("availabilities")
+    .select("treatment_id, member_id, status, comment")
+    .in("treatment_id", treatments.map((t) => t.id));
+  const availabilities = availData ?? [];
+
+  // Créneaux cités dans l'historique mais pas dans la liste ci-dessus (ex. hier).
+  const known = new Map<string, { date: string; slot: Slot }>(treatments.map((t) => [t.id, t]));
+  const missing = [...new Set(logs.map((l) => l.treatment_id).filter((id) => id && !known.has(id)))];
+  if (missing.length) {
+    const { data } = await supabase.from("treatments").select("id, date, slot").in("id", missing);
+    for (const t of data ?? []) known.set(t.id, t);
+  }
+
+  const nameOf = (id: string | null) => members?.find((m) => m.id === id)?.name ?? "Quelqu'un";
+
+  // Prépare une carte prête à afficher.
+  const toView = (t: TreatmentRow): SlotView => ({
+    id: t.id,
+    order: slotOrder(t.date, t.slot),
+    title: `${capitalize(slotLabel(t.date, t.slot, today))} · ${SLOT_HOUR[t.slot]}`,
+    dateLabel: shortDate(t.date),
+    location: t.location,
+    done:
+      t.done_by && t.done_at
+        ? { by: nameOf(t.done_by), at: formatTime(t.done_at), comment: t.done_comment }
+        : null,
+    people: (members ?? []).map((m) => {
+      const a = availabilities.find((x) => x.treatment_id === t.id && x.member_id === m.id);
+      return {
+        memberId: m.id,
+        name: m.name,
+        status: (a?.status as Status) ?? null,
+        comment: a?.comment ?? null,
+      };
+    }),
+  });
+
+  const next = pickNextTreatment(treatments, now);
+  const upcoming = treatments.filter((t) => t.date <= addDays(today, 3) && t.id !== next?.id);
+
+  // Choix possibles pour « Changer le lieu → Jusqu'au… »
+  const locationOptions: SlotOption[] = treatments.map((t) => ({
+    id: t.id,
+    order: slotOrder(t.date, t.slot),
+    label: `${capitalize(slotLabel(t.date, t.slot, today))} (${shortDate(t.date)})`,
+  }));
+
+  const history: HistoryRow[] = logs.map((l) => ({
+    id: String(l.id),
+    action: l.action,
+    detail: l.detail,
+    created_at: l.created_at,
+    name: nameOf(l.member_id),
+    treatment: known.get(l.treatment_id) ?? null,
+  }));
+
+  return (
+    <>
+      <header className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">🐱 Bonjour {me.name}</h1>
+        <form action={logout}>
+          <button type="submit" className="text-sm text-zinc-500 underline">
+            Changer de personne
+          </button>
+        </form>
+      </header>
+
+      {next ? (
+        <TreatmentCard slot={toView(next)} me={me.id} big locationOptions={locationOptions} />
+      ) : (
+        <p>Aucun créneau trouvé.</p>
+      )}
+
+      {upcoming.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Les prochains jours</h2>
+          {upcoming.map((t) => (
+            <TreatmentCard key={t.id} slot={toView(t)} me={me.id} locationOptions={locationOptions} />
+          ))}
+        </section>
+      )}
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Historique</h2>
+        <History rows={history} today={today} />
+      </section>
+    </>
   );
 }
