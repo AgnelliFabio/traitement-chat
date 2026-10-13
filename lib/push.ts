@@ -9,6 +9,28 @@ webpush.setVapidDetails(
 );
 
 type Payload = { title: string; body: string; url?: string };
+type Subscription = { endpoint: string; p256dh: string; auth: string };
+
+// Envoie la notification à une liste d'abonnements (un abonnement = un téléphone).
+async function sendTo(subs: Subscription[], payload: Payload) {
+  await Promise.all(
+    subs.map(async (s) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          JSON.stringify(payload)
+        );
+      } catch (err: unknown) {
+        // 404 / 410 = l'abonnement n'existe plus (app désinstallée,
+        // notifications coupées...) : on le supprime de la base.
+        const status = (err as { statusCode?: number })?.statusCode;
+        if (status === 404 || status === 410) {
+          await supabase.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
+        }
+      }
+    })
+  );
+}
 
 // Envoie une notification à tout le monde, sauf (optionnellement) à la personne
 // qui vient d'agir : inutile de te notifier de ta propre action.
@@ -17,21 +39,12 @@ export async function notify(payload: Payload, exceptMemberId?: string) {
   if (exceptMemberId) query = query.neq("member_id", exceptMemberId);
 
   const { data: subs } = await query;
+  await sendTo(subs ?? [], payload);
+}
 
-  await Promise.all(
-    (subs ?? []).map(async (s) => {
-      try {
-        await webpush.sendNotification(
-          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-          JSON.stringify(payload)
-        );
-      } catch (err: any) {
-        // 404 / 410 = l'abonnement n'existe plus (app désinstallée,
-        // notifications coupées...) : on le supprime de la base.
-        if (err?.statusCode === 404 || err?.statusCode === 410) {
-          await supabase.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
-        }
-      }
-    })
-  );
+// Envoie une notification à une seule personne (sur tous ses téléphones).
+// Sert à la notification de test.
+export async function notifyMember(payload: Payload, memberId: string) {
+  const { data: subs } = await supabase.from("push_subscriptions").select("*").eq("member_id", memberId);
+  await sendTo(subs ?? [], payload);
 }

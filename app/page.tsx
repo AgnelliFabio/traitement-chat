@@ -22,6 +22,7 @@ import type { DayView, SlotOption } from "@/lib/labels";
 import LoginForm from "./components/LoginForm";
 import Header from "./components/Header";
 import HomeView from "./components/HomeView";
+import PushBanner from "./components/PushBanner";
 
 // La page elle-même est une coquille ; le contenu (qui lit le cookie) arrive juste après.
 export default function Page() {
@@ -76,6 +77,7 @@ async function Home() {
   return (
     <>
       <Header title={`🐱 Bonjour ${me.name}`} />
+      <PushBanner />
       <HomeView
         days={days}
         initialIndex={initialIndex}

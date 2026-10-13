@@ -7,7 +7,7 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { notify } from "@/lib/push";
+import { notify, notifyMember } from "@/lib/push";
 import { clearMemberCookie, getCurrentMember, setMemberCookie } from "@/lib/auth";
 import { parisNow, slotLabel, slotOrder, treatmentOf } from "@/lib/time";
 import {
@@ -275,5 +275,55 @@ export async function changeLocation(
   );
 
   refresh();
+  return {};
+}
+
+// --- Notifications push ----------------------------------------------------
+
+// Ce que le navigateur donne quand on s'abonne (adresse d'envoi + clés de chiffrement).
+export type PushSubscriptionData = { endpoint: string; keys: { p256dh: string; auth: string } };
+
+const isShortString = (v: unknown, max: number) => typeof v === "string" && v.length > 0 && v.length <= max;
+
+// Enregistre l'abonnement de ce téléphone pour la personne connectée.
+// Si le téléphone était déjà enregistré pour quelqu'un d'autre, il passe à la personne connectée.
+export async function subscribePush(sub: PushSubscriptionData): Promise<ActionResult> {
+  const me = await getCurrentMember();
+  if (!me) return NOT_LOGGED;
+
+  if (
+    !isShortString(sub?.endpoint, 1000) ||
+    !sub.endpoint.startsWith("https://") ||
+    !isShortString(sub.keys?.p256dh, 200) ||
+    !isShortString(sub.keys?.auth, 200)
+  ) {
+    return { error: "Abonnement invalide." };
+  }
+
+  const { error } = await supabase.from("push_subscriptions").upsert({
+    endpoint: sub.endpoint,
+    member_id: me.id,
+    p256dh: sub.keys.p256dh,
+    auth: sub.keys.auth,
+  });
+  return error ? SAVE_ERROR : {};
+}
+
+// Supprime l'abonnement de ce téléphone (seulement s'il appartient à la personne connectée).
+export async function unsubscribePush(endpoint: string): Promise<ActionResult> {
+  const me = await getCurrentMember();
+  if (!me) return NOT_LOGGED;
+  if (!isShortString(endpoint, 1000)) return SAVE_ERROR;
+
+  await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint).eq("member_id", me.id);
+  return {};
+}
+
+// Notification de test, envoyée uniquement à soi-même.
+export async function sendTestNotification(): Promise<ActionResult> {
+  const me = await getCurrentMember();
+  if (!me) return NOT_LOGGED;
+
+  await notifyMember({ title: NOTIF_TITLE, body: `🔔 Test réussi, ${me.name} : les notifications marchent !`, url: "/" }, me.id);
   return {};
 }

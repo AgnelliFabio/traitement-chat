@@ -1,5 +1,5 @@
 // Page Notifications :
-// 1. « Sur ce téléphone » : activation des notifications (arrive à l'étape suivante) ;
+// 1. « Sur ce téléphone » : activer / tester / désactiver les notifications ;
 // 2. « Ce que tu reçois » : mémo des notifications existantes ;
 // 3. « Dernières notifications » : les 20 dernières actions, pour rattraper une notif ratée.
 
@@ -10,6 +10,7 @@ import { getMembers, loadActivity } from "@/lib/data";
 import { parisNow } from "@/lib/time";
 import Header from "../components/Header";
 import ActivityFeed from "../components/ActivityFeed";
+import PushManager from "../components/PushManager";
 
 export default function Page() {
   return (
@@ -35,10 +36,7 @@ async function Notifications() {
 
       <section className={card}>
         <h2 className="text-lg font-semibold">Sur ce téléphone</h2>
-        <p className="text-zinc-500">
-          Bientôt disponible : un bouton pour activer les notifications sur ce téléphone, et un autre
-          pour s&apos;envoyer une notification de test.
-        </p>
+        <PushManager />
       </section>
 
       <section className={card}>
